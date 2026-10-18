@@ -10,3 +10,14 @@ node_modules
 **/.turbo
 **/.vite
 **/coverage
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+**/*.log
+.DS_Store
+/Dockerfile
+/docker-compose.yml
+/DEPLOYMENT.zh-CN.md
+/deploy
