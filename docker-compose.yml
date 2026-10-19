@@ -2,5 +2,5 @@ services:
   opencode-chenyuq:
     build: .
     ports:
-      - "127.0.0.1:4096:4096"
+      - "${OPENCODE_BIND_ADDRESS:-127.0.0.1}:${OPENCODE_PORT:-4096}:4096"
     restart: unless-stopped

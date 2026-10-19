@@ -1,114 +1,96 @@
 # Recitation 6 部署说明
 
-课程要求：<https://cmu-17313q.github.io/recitations/reci6-deployment/>
+[最新课程要求](https://cmu-17313q.github.io/recitations/reci6-deployment/)：在课程 VM 上用 Docker Compose 运行 OpenCode，通过 `http://crs-17313-demo.qatar.cmu.edu:<YOUR_PORT>` 访问，再将 URL 提交 Gradescope。
 
-此分支为 `codex/recitation-deployment`，基于课程仓库的 `dev` 分支。
-Andrew ID 使用 `chenyuq`。尚未拿到课程 VM hostname，下面的 VM 命令需等地址确认后执行。
+## 当前进度（2026-10-19）
 
-## 文件用途
+- 本地 Linux ARM64 镜像已构建，版本为 `1.18.31-reci`；健康接口、网页资源、浏览器主页、终端 PTY 和文件搜索已验证
+- `Dockerfile` 构建本仓库的程序及网页 UI；`bun.lock` 已补齐源码原本声明的 `openai@6.39.1`，仍使用 `--frozen-lockfile`
+- 用户已手动登录 VM；`chenyuq` 属于 `docker` 组，VM 为 Linux x86_64，Docker 为 `29.1.3`、Compose 为 `2.40.3`
+- 本次检查中 4096 无监听、无 Docker 端口映射，`chenyuq-reci6` 无现有容器；尚未远程部署，也未提交部署 URL
+- `4096` 仅用于本次已获授权的示例测试，尚未确认它是分配给自己的正式端口
 
-- `Dockerfile`：安装 Bun 1.3.14 和构建依赖，构建本仓库的 OpenCode 与网页 UI，再把编译产物放入运行镜像
-- `docker-compose.yml`：后台运行服务，只把 4096 端口绑定到 VM 的 `127.0.0.1`，并设置 `restart: unless-stopped`
-- `deploy/nginx-opencode.conf.template`：Nginx 监听 80 端口，转发 HTTP、WebSocket 和流式响应到 OpenCode
+本地 ARM64 验证不代表 VM 构建成功；应在 VM 上按其自身 Linux 架构重新构建。构建需要联网下载依赖与 models.dev 元数据。网页部署和模型服务配置分别验证。
 
-Docker 构建需要联网下载依赖与 models.dev 元数据。模型对话需要另行配置可用的模型服务；网页部署验证不代表模型对话已经配置完成。
+## 1. 登录课程 VM
 
-## 本地验证（2026-10-19）
-
-- Linux ARM64 镜像构建成功，最终运行镜像中的程序版本为 `1.18.31-reci`
-- 容器健康检查、首页及本地 JavaScript/CSS 资源请求通过，浏览器实际显示 OpenCode 主页
-- 终端 PTY 启动、正常退出、删除，以及文件搜索检查通过
-- Nginx 模板语法检查与隔离容器中的代理请求通过
-- 容器的 `unless-stopped` 策略已核对；VM 开机启动和实际重启恢复尚未验证
-
-课程源码的 `package.json` 已声明 `openai@6.39.1`，但原 `bun.lock` 漏记了这一项。
-此分支仅补齐对应锁文件记录，没有升级其他依赖，Docker 构建仍使用 `--frozen-lockfile`。
-
-## 1. 在自己的电脑连接 VM
-
-把 `<VM-HOSTNAME>` 替换成老师实际提供的地址：
+在自己的电脑连接 CMU 网络或 VPN，然后运行并手动完成认证：
 
 ```bash
-ssh chenyuq@<VM-HOSTNAME>
+ssh chenyuq@crs-17313-demo.qatar.cmu.edu
 ```
 
-后续 `systemctl` 和 `/etc/nginx` 命令在 Linux VM 上运行。
+下面第 2 至第 4 步在 VM 内执行。
 
-## 2. 在 VM 获取部署分支
+## 2. 检查 Docker 权限与测试端口
 
 ```bash
-gh auth login
-cd ~
-git clone --single-branch --branch codex/recitation-deployment https://github.com/adrianchenyuqiu/OpenCode-F26-Reci-7.git
-cd OpenCode-F26-Reci-7
+docker compose version
+docker info --format '{{.ServerVersion}}'
+ss -ltn 'sport = :4096'
+docker ps --filter publish=4096 --format 'table {{.ID}}\t{{.Names}}\t{{.Ports}}'
 ```
 
-如果该目录已经存在，先检查其中的分支与未提交修改，不要覆盖现有工作。
+只有 Docker 可用且 4096 没有被其他服务占用时，才继续部署。若发现已有容器，先核对归属与 Compose 项目标签；不要停止其他人的服务。
 
-## 3. 构建并启动 OpenCode
+如果 Docker 报 `permission denied`，记录报错、`id` 和 `ls -l /var/run/docker.sock` 的输出。可用 `sudo -n docker info` 检查是否已有免密权限；若仍不可用，向课程管理员报告“SSH 已登录，但 Docker 权限阻止部署”，暂不执行启动命令，不自行修改用户组或 socket 权限。
 
-VM 需要已安装 Docker Engine、Docker Compose 插件和 Nginx。
+## 3. 获取仓库并启动自己的服务
+
+分支为 `codex/recitation-deployment`，基于课程仓库的 `dev`。如果 `~/OpenCode-F26-Reci-7` 已存在，先检查其中的分支和未提交修改；不要覆盖已有目录。以下克隆命令用于目录尚不存在的情况：
 
 ```bash
-docker compose config --quiet
-docker compose up --build -d
-docker compose ps
-docker compose logs --tail=80
-curl --fail http://127.0.0.1:4096/global/health
+git clone --depth 1 --single-branch --branch codex/recitation-deployment https://github.com/adrianchenyuqiu/OpenCode-F26-Reci-7.git ~/OpenCode-F26-Reci-7
 ```
 
-健康接口应返回 `healthy: true`，容器应显示 `healthy`。首次构建会安装整个仓库的依赖并编译网页，可能需要数分钟。
-镜像会按构建机器的 Linux 架构编译；VM 上应重新构建镜像。
-
-## 4. 配置 Nginx
-
-把下面引号里的地址改为老师实际提供的 hostname，再执行。
-如果已有同名配置，下面的命令会停留在检查提示；先查看现有文件，再决定如何更新。
+确认仓库正确后，进入目录并明确启用 VM 的直接访问。固定使用项目名 `chenyuq-reci6`，仅管理服务 `opencode-chenyuq`：
 
 ```bash
-VM_HOSTNAME='<VM-HOSTNAME>'
-if sudo test -e /etc/nginx/sites-available/opencode || sudo test -L /etc/nginx/sites-available/opencode || sudo test -e /etc/nginx/sites-enabled/opencode || sudo test -L /etc/nginx/sites-enabled/opencode; then
-  echo '已有 OpenCode Nginx 配置，请先查看文件再更新'
-else
-  sed "s/<VM-HOSTNAME>/${VM_HOSTNAME}/g" deploy/nginx-opencode.conf.template | sudo tee /etc/nginx/sites-available/opencode > /dev/null &&
-  sudo ln -s /etc/nginx/sites-available/opencode /etc/nginx/sites-enabled/opencode &&
-  sudo nginx -t &&
-  sudo systemctl reload nginx
-fi
-curl --fail -H "Host: ${VM_HOSTNAME}" http://127.0.0.1/global/health
+cd ~/OpenCode-F26-Reci-7
+export OPENCODE_BIND_ADDRESS=0.0.0.0 OPENCODE_PORT=4096
+docker compose -p chenyuq-reci6 config --quiet
+docker compose -p chenyuq-reci6 up --build -d opencode-chenyuq
+docker compose -p chenyuq-reci6 ps opencode-chenyuq
+docker compose -p chenyuq-reci6 logs --tail=80 opencode-chenyuq
 ```
 
-命令只有在 `nginx -t` 成功后才执行 reload。
+Compose 默认绑定 `127.0.0.1:4096`，适合本地验证；VM 上面的环境变量将其改为 `0.0.0.0:4096`，供校网直接访问。每次重新登录 VM 后，运行 Compose 前都应重新设置这两个变量。正式端口确定后，更新 `OPENCODE_PORT` 和下方 URL，并重新检查端口与访问结果。
 
-在自己的电脑上，按课程网络要求连接 CMU 网络，再打开：
+首次构建可能需要数分钟。容器起初可能显示 `starting`；等待其显示 `healthy` 后再检查接口：
+
+```bash
+curl --fail --show-error --max-time 10 http://127.0.0.1:4096/global/health
+```
+
+应返回包含 `"healthy":true` 的 JSON。
+
+## 4. 核对重启策略
+
+```bash
+docker inspect "$(docker compose -p chenyuq-reci6 ps -q opencode-chenyuq)" --format '{{.HostConfig.RestartPolicy.Name}}'
+systemctl is-enabled docker
+```
+
+容器策略应为 `unless-stopped`。Docker 的开机启动状态单独记录；若未启用，由课程管理员确认共享 VM 的设置。本次不重启 VM 或 Docker。配置检查通过也不等于已经验证实际重启恢复。
+
+若曾手动停止自己的容器，需要重新运行本项目的 `up -d`；`unless-stopped` 会保留手动停止的状态。
+
+## 5. 从自己的电脑访问并提交 URL
+
+保持 CMU 网络或 VPN 连接，在自己的电脑执行：
+
+```bash
+curl --fail --show-error --max-time 10 http://crs-17313-demo.qatar.cmu.edu:4096/global/health
+```
+
+再用浏览器打开 [本次示例测试地址](http://crs-17313-demo.qatar.cmu.edu:4096/)，确认实际显示 OpenCode 网页。VM 内健康检查成功和另一台电脑成功访问需要分别验证。
+
+在 Gradescope 的对应作业（ID `8896144`）提交已验证的部署 URL：
 
 ```text
-http://<VM-HOSTNAME>/
+http://crs-17313-demo.qatar.cmu.edu:4096/
 ```
 
-确认看到 OpenCode 网页。此模板使用课程要求的 HTTP 配置。
+提交前确认课程接受当前测试端口；若收到自己的正式端口，先更新部署与 URL。提交后重新打开作业，核对提交内容和回执。
 
-## 5. 配置开机自启
-
-```bash
-sudo systemctl enable docker
-systemctl is-enabled docker nginx
-systemctl is-active docker nginx
-docker inspect "$(docker compose ps -q opencode-chenyuq)" --format '{{.HostConfig.RestartPolicy.Name}}'
-```
-
-Docker 与 Nginx 的 enablement 应为 `enabled`，服务状态应为 `active`，容器策略应为 `unless-stopped`。
-如果 Nginx 还未设为开机启动，再运行 `sudo systemctl enable nginx`。
-
-`unless-stopped` 会保留手动停止的状态；若此前执行过 `docker compose stop`，需要重新运行 `docker compose up -d`。
-上述检查验证的是配置，实际 VM 重启后的恢复情况仍需要单独验证。课程页面没有要求主动重启 VM。
-
-## 完成标准
-
-- Docker 镜像构建成功，容器健康检查通过
-- 本机访问 4096 的健康接口和网页成功
-- Nginx 配置检查通过，代理请求成功
-- 在 CMU 网络的另一台电脑上打开 VM 网页成功
-- Docker 与 Nginx 开机启动配置、容器重启策略已验证
-
-课程页面没有列出截图、PR 或 Gradescope 上传要求；如 Gradescope 有对应作业，以其具体说明为准。
+当前课程直接将主机端口映射到容器的 4096，无需安装或配置 Nginx。仓库中的 `deploy/nginx-opencode.conf.template` 仅保留为旧方案参考。
