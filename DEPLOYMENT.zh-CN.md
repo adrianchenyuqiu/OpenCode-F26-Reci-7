@@ -4,14 +4,16 @@
 
 ## 当前进度（2026-10-19）
 
+当前按用户要求选用 9001，真实部署地址为 <http://crs-17313-demo.qatar.cmu.edu:9001/>。VM 内与 SSH 通道验证通过，当前 VPN 直连仍超时；教师/评分端可达性及课程分配编号尚未确认，尚未提交 Gradescope。
+
 - 本地 Linux ARM64 镜像已构建，版本为 `1.18.31-reci`；健康接口、网页资源、浏览器主页、终端 PTY 和文件搜索已验证
 - `Dockerfile` 构建本仓库的程序及网页 UI；`bun.lock` 已补齐源码原本声明的 `openai@6.39.1`，仍使用 `--frozen-lockfile`
 - 用户已手动登录 VM；`chenyuq` 属于 `docker` 组，VM 为 Linux x86_64，Docker 为 `29.1.3`、Compose 为 `2.40.3`
-- 已在 VM 上完成 Linux x86_64 原生构建，启动 `chenyuq-reci6-opencode-chenyuq-1`，映射 `0.0.0.0:4096`，容器为 `healthy`
+- 已在 VM 上完成 Linux x86_64 原生构建，启动 `chenyuq-reci6-opencode-chenyuq-1`，当前映射 `0.0.0.0:9001 → 容器4096`，容器为 `healthy`
 - VM 内健康检查、经 SSH 通道的网页资源、浏览器主页、终端 PTY 和文件搜索已验证
 - VM 的 Docker 开机启动为 `enabled`，容器策略为 `unless-stopped`；未重启共享 VM 或 Docker
-- VPN 客户端直接访问课程主机的 4096 仍超时，浏览器直连也未通过；尚未提交 Gradescope
-- `4096` 仅用于本次已获授权的示例测试，尚未确认它是分配给自己的正式端口
+- VPN 客户端直接访问课程主机的 9001 仍超时；尚未验证评分端可达，尚未提交 Gradescope
+- `9001` 是用户选定的暂用端口，尚未确认它是课程分配给自己的正式端口
 - 本轮重新登录发现原目录和容器已不存在；已从本分支恢复源码并重新构建、启动自己的实例，网页、终端和文件搜索再次通过 SSH 通道验证
 - 已在确认空闲的 9001 上分别启动临时 Docker 和宿主机原生标记服务：两者在 VM 本机均通过，从当前 VPN 以域名/IP 访问均连接超时；临时资源已清理，原服务仍 healthy
 
@@ -20,16 +22,16 @@
 ## 当前访问阻碍
 
 应用在 VM 内正常运行，SSH 登录正常；客户端 DNS 与目标 VPN 路由检查没有发现异常。
-课程 URL 的 TCP 4096 直接访问仍未通过，具体访问限制需要课程管理员确认，或改用确认可访问的正式分配端口。
+课程 URL 的 TCP 9001 直接访问仍未通过，具体访问限制需要课程管理员确认，或改用确认可访问的正式分配端口。
 
-[课件第 4 页](https://cmu-17313q.github.io/assets/pdfs/Recitation-06-Deployment-Intro.pdf#page=4)规定正式端口为 `9000 + Your number`。个人数字编号尚未取得，不能用 Andrew ID 推算。9001 只是临时诊断端口，测试后已释放。
+[课件第 4 页](https://cmu-17313q.github.io/assets/pdfs/Recitation-06-Deployment-Intro.pdf#page=4)规定正式端口为 `9000 + Your number`。个人数字编号尚未取得，不能用 Andrew ID 推算。9001 的临时探针已清理，随后按用户要求将主服务切换到 9001；该选择不代表已核实课程分配。
 
 9001 的同端口对照说明当前问题不只涉及 Docker 转发；还需区分主机入站规则与校园/VPN网络。9000–9999 的空端口扫描不能代替实际服务监听测试，也不能证明每个端口都被封锁。
 
 测试时可以通过自己的 SSH 连接访问 VM 上的同一服务：
 
 ```bash
-ssh -N -L 127.0.0.1:14096:127.0.0.1:4096 chenyuq@crs-17313-demo.qatar.cmu.edu
+ssh -N -L 127.0.0.1:14096:127.0.0.1:9001 chenyuq@crs-17313-demo.qatar.cmu.edu
 ```
 
 保持该连接，在本机打开 <http://127.0.0.1:14096/>。这个地址仅用于 SSH 通道测试，不能提交为课程部署 URL。
@@ -49,11 +51,11 @@ ssh chenyuq@crs-17313-demo.qatar.cmu.edu
 ```bash
 docker compose version
 docker info --format '{{.ServerVersion}}'
-ss -ltn 'sport = :4096'
-docker ps --filter publish=4096 --format 'table {{.ID}}\t{{.Names}}\t{{.Ports}}'
+ss -ltn 'sport = :9001'
+docker ps --filter publish=9001 --format 'table {{.ID}}\t{{.Names}}\t{{.Ports}}'
 ```
 
-只有 Docker 可用且 4096 没有被其他服务占用时，才继续部署。若发现已有容器，先核对归属与 Compose 项目标签；不要停止其他人的服务。
+只有 Docker 可用且 9001 没有被其他服务占用时，才继续部署。若发现已有容器，先核对归属与 Compose 项目标签；不要停止其他人的服务。
 
 如果 Docker 报 `permission denied`，记录报错、`id` 和 `ls -l /var/run/docker.sock` 的输出。可用 `sudo -n docker info` 检查是否已有免密权限；若仍不可用，向课程管理员报告“SSH 已登录，但 Docker 权限阻止部署”，暂不执行启动命令，不自行修改用户组或 socket 权限。
 
@@ -65,12 +67,12 @@ docker ps --filter publish=4096 --format 'table {{.ID}}\t{{.Names}}\t{{.Ports}}'
 git clone --depth 1 --single-branch --branch codex/recitation-deployment https://github.com/adrianchenyuqiu/OpenCode-F26-Reci-7.git ~/OpenCode-F26-Reci-7
 ```
 
-确认仓库正确后，进入目录并检查已有 `.env`。当前 VM 已持久保存以下配置；文件不存在时再创建，已有文件只调整对应项，不覆盖其他配置。`4096` 是示例测试端口，收到正式编号后替换为计算出的端口：
+确认仓库正确后，进入目录并检查已有 `.env`。当前 VM 已持久保存以下配置；文件不存在时再创建，已有文件只调整对应项，不覆盖其他配置。`9001` 是当前用户选择的暂用端口，收到正式编号后可替换为计算出的端口：
 
 ```dotenv
 COMPOSE_PROJECT_NAME=chenyuq-reci6
 OPENCODE_BIND_ADDRESS=0.0.0.0
-OPENCODE_PORT=4096
+OPENCODE_PORT=9001
 ```
 
 固定使用项目名 `chenyuq-reci6`，仅管理服务 `opencode-chenyuq`。清除旧终端中同名变量的覆盖后，让 Compose 读取项目 `.env`：
@@ -84,12 +86,12 @@ docker compose -p chenyuq-reci6 ps opencode-chenyuq
 docker compose -p chenyuq-reci6 logs --tail=80 opencode-chenyuq
 ```
 
-Compose 默认绑定 `127.0.0.1:4096`，适合本地验证；VM 的 `.env` 将其改为 `0.0.0.0:4096`。`.env` 保留后，重新登录无需再次 export。对外绑定并不保证校园/VPN网络允许连接。正式端口确定后，更新 `.env` 的 `OPENCODE_PORT` 和下方 URL，并重新检查端口与访问结果。
+Compose 默认绑定 `127.0.0.1:4096`，适合本地验证；VM 的 `.env` 将其改为 `0.0.0.0:9001`，容器内部继续使用 4096。`.env` 保留后，重新登录无需再次 export。对外绑定并不保证校园/VPN网络允许连接。正式端口确定后，更新 `.env` 的 `OPENCODE_PORT` 和下方 URL，并重新检查端口与访问结果。
 
 首次构建可能需要数分钟。容器起初可能显示 `starting`；等待其显示 `healthy` 后再检查接口：
 
 ```bash
-curl --fail --show-error --max-time 10 http://127.0.0.1:4096/global/health
+curl --fail --show-error --max-time 10 http://127.0.0.1:9001/global/health
 ```
 
 应返回包含 `"healthy":true` 的 JSON。
@@ -110,15 +112,15 @@ systemctl is-enabled docker
 保持 CMU 网络或 VPN 连接，在自己的电脑执行：
 
 ```bash
-curl --fail --show-error --max-time 10 http://crs-17313-demo.qatar.cmu.edu:4096/global/health
+curl --fail --show-error --max-time 10 http://crs-17313-demo.qatar.cmu.edu:9001/global/health
 ```
 
-再用浏览器打开 [本次示例测试地址](http://crs-17313-demo.qatar.cmu.edu:4096/)，确认实际显示 OpenCode 网页。VM 内健康检查成功和另一台电脑成功访问需要分别验证。
+再用浏览器打开 [当前部署地址](http://crs-17313-demo.qatar.cmu.edu:9001/)，确认实际显示 OpenCode 网页。VM 内健康检查成功和另一台电脑成功访问需要分别验证。
 
-当前直连尚未通过，尚未提交。正式端口上的网页访问验证成功后，才在 Gradescope 的对应作业（ID `8896144`）提交部署 URL：
+当前直连尚未通过，尚未提交。按用户要求准备的部署 URL 如下；在 Gradescope 对应作业（ID `8896144`）提交前，仍需确认评分端可访问以及课程是否接受当前端口：
 
 ```text
-http://crs-17313-demo.qatar.cmu.edu:<正式端口>/
+http://crs-17313-demo.qatar.cmu.edu:9001/
 ```
 
 提交前确认课程接受当前测试端口；若收到自己的正式端口，先更新部署与 URL。提交后重新打开作业，核对提交内容和回执。
