@@ -12,6 +12,8 @@
 - VM 的 Docker 开机启动为 `enabled`，容器策略为 `unless-stopped`；未重启共享 VM 或 Docker
 - VPN 客户端直接访问课程主机的 4096 仍超时，浏览器直连也未通过；尚未提交 Gradescope
 - `4096` 仅用于本次已获授权的示例测试，尚未确认它是分配给自己的正式端口
+- 本轮重新登录发现原目录和容器已不存在；已从本分支恢复源码并重新构建、启动自己的实例，网页、终端和文件搜索再次通过 SSH 通道验证
+- 已在确认空闲的 9001 上分别启动临时 Docker 和宿主机原生标记服务：两者在 VM 本机均通过，从当前 VPN 以域名/IP 访问均连接超时；临时资源已清理，原服务仍 healthy
 
 本次已分别验证本地 Linux ARM64 和 VM Linux x86_64 构建；后续应按运行机器的实际架构重建。构建需要联网下载依赖与 models.dev 元数据。网页部署和模型服务配置分别验证。
 
@@ -19,6 +21,10 @@
 
 应用在 VM 内正常运行，SSH 登录正常；客户端 DNS 与目标 VPN 路由检查没有发现异常。
 课程 URL 的 TCP 4096 直接访问仍未通过，具体访问限制需要课程管理员确认，或改用确认可访问的正式分配端口。
+
+[课件第 4 页](https://cmu-17313q.github.io/assets/pdfs/Recitation-06-Deployment-Intro.pdf#page=4)规定正式端口为 `9000 + Your number`。个人数字编号尚未取得，不能用 Andrew ID 推算。9001 只是临时诊断端口，测试后已释放。
+
+9001 的同端口对照说明当前问题不只涉及 Docker 转发；还需区分主机入站规则与校园/VPN网络。9000–9999 的空端口扫描不能代替实际服务监听测试，也不能证明每个端口都被封锁。
 
 测试时可以通过自己的 SSH 连接访问 VM 上的同一服务：
 
@@ -59,18 +65,26 @@ docker ps --filter publish=4096 --format 'table {{.ID}}\t{{.Names}}\t{{.Ports}}'
 git clone --depth 1 --single-branch --branch codex/recitation-deployment https://github.com/adrianchenyuqiu/OpenCode-F26-Reci-7.git ~/OpenCode-F26-Reci-7
 ```
 
-确认仓库正确后，进入目录并明确启用 VM 的直接访问。固定使用项目名 `chenyuq-reci6`，仅管理服务 `opencode-chenyuq`：
+确认仓库正确后，进入目录并检查已有 `.env`。当前 VM 已持久保存以下配置；文件不存在时再创建，已有文件只调整对应项，不覆盖其他配置。`4096` 是示例测试端口，收到正式编号后替换为计算出的端口：
+
+```dotenv
+COMPOSE_PROJECT_NAME=chenyuq-reci6
+OPENCODE_BIND_ADDRESS=0.0.0.0
+OPENCODE_PORT=4096
+```
+
+固定使用项目名 `chenyuq-reci6`，仅管理服务 `opencode-chenyuq`。清除旧终端中同名变量的覆盖后，让 Compose 读取项目 `.env`：
 
 ```bash
 cd ~/OpenCode-F26-Reci-7
-export OPENCODE_BIND_ADDRESS=0.0.0.0 OPENCODE_PORT=4096
+unset OPENCODE_BIND_ADDRESS OPENCODE_PORT COMPOSE_PROJECT_NAME
 docker compose -p chenyuq-reci6 config --quiet
 docker compose -p chenyuq-reci6 up --build -d opencode-chenyuq
 docker compose -p chenyuq-reci6 ps opencode-chenyuq
 docker compose -p chenyuq-reci6 logs --tail=80 opencode-chenyuq
 ```
 
-Compose 默认绑定 `127.0.0.1:4096`，适合本地验证；VM 上面的环境变量将其改为 `0.0.0.0:4096`，供校网直接访问。每次重新登录 VM 后，运行 Compose 前都应重新设置这两个变量。正式端口确定后，更新 `OPENCODE_PORT` 和下方 URL，并重新检查端口与访问结果。
+Compose 默认绑定 `127.0.0.1:4096`，适合本地验证；VM 的 `.env` 将其改为 `0.0.0.0:4096`。`.env` 保留后，重新登录无需再次 export。对外绑定并不保证校园/VPN网络允许连接。正式端口确定后，更新 `.env` 的 `OPENCODE_PORT` 和下方 URL，并重新检查端口与访问结果。
 
 首次构建可能需要数分钟。容器起初可能显示 `starting`；等待其显示 `healthy` 后再检查接口：
 
@@ -101,10 +115,10 @@ curl --fail --show-error --max-time 10 http://crs-17313-demo.qatar.cmu.edu:4096/
 
 再用浏览器打开 [本次示例测试地址](http://crs-17313-demo.qatar.cmu.edu:4096/)，确认实际显示 OpenCode 网页。VM 内健康检查成功和另一台电脑成功访问需要分别验证。
 
-在 Gradescope 的对应作业（ID `8896144`）提交已验证的部署 URL：
+当前直连尚未通过，尚未提交。正式端口上的网页访问验证成功后，才在 Gradescope 的对应作业（ID `8896144`）提交部署 URL：
 
 ```text
-http://crs-17313-demo.qatar.cmu.edu:4096/
+http://crs-17313-demo.qatar.cmu.edu:<正式端口>/
 ```
 
 提交前确认课程接受当前测试端口；若收到自己的正式端口，先更新部署与 URL。提交后重新打开作业，核对提交内容和回执。
