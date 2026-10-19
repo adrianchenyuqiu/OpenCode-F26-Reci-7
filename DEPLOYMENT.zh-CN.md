@@ -7,10 +7,26 @@
 - 本地 Linux ARM64 镜像已构建，版本为 `1.18.31-reci`；健康接口、网页资源、浏览器主页、终端 PTY 和文件搜索已验证
 - `Dockerfile` 构建本仓库的程序及网页 UI；`bun.lock` 已补齐源码原本声明的 `openai@6.39.1`，仍使用 `--frozen-lockfile`
 - 用户已手动登录 VM；`chenyuq` 属于 `docker` 组，VM 为 Linux x86_64，Docker 为 `29.1.3`、Compose 为 `2.40.3`
-- 本次检查中 4096 无监听、无 Docker 端口映射，`chenyuq-reci6` 无现有容器；尚未远程部署，也未提交部署 URL
+- 已在 VM 上完成 Linux x86_64 原生构建，启动 `chenyuq-reci6-opencode-chenyuq-1`，映射 `0.0.0.0:4096`，容器为 `healthy`
+- VM 内健康检查、经 SSH 通道的网页资源、浏览器主页、终端 PTY 和文件搜索已验证
+- VM 的 Docker 开机启动为 `enabled`，容器策略为 `unless-stopped`；未重启共享 VM 或 Docker
+- VPN 客户端直接访问课程主机的 4096 仍超时，浏览器直连也未通过；尚未提交 Gradescope
 - `4096` 仅用于本次已获授权的示例测试，尚未确认它是分配给自己的正式端口
 
-本地 ARM64 验证不代表 VM 构建成功；应在 VM 上按其自身 Linux 架构重新构建。构建需要联网下载依赖与 models.dev 元数据。网页部署和模型服务配置分别验证。
+本次已分别验证本地 Linux ARM64 和 VM Linux x86_64 构建；后续应按运行机器的实际架构重建。构建需要联网下载依赖与 models.dev 元数据。网页部署和模型服务配置分别验证。
+
+## 当前访问阻碍
+
+应用在 VM 内正常运行，SSH 登录正常；客户端 DNS 与目标 VPN 路由检查没有发现异常。
+课程 URL 的 TCP 4096 直接访问仍未通过，具体访问限制需要课程管理员确认，或改用确认可访问的正式分配端口。
+
+测试时可以通过自己的 SSH 连接访问 VM 上的同一服务：
+
+```bash
+ssh -N -L 127.0.0.1:14096:127.0.0.1:4096 chenyuq@crs-17313-demo.qatar.cmu.edu
+```
+
+保持该连接，在本机打开 <http://127.0.0.1:14096/>。这个地址仅用于 SSH 通道测试，不能提交为课程部署 URL。
 
 ## 1. 登录课程 VM
 
